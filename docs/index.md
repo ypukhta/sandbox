@@ -1,4 +1,4 @@
 
 # OpenAPI specifications
 
-- [Gatekeeper](k8s/gatekeeper/gatekeepr_open_api.html)
+- [Gatekeeper](openapi-specs/gatekeeper/swagger-ui.html)
