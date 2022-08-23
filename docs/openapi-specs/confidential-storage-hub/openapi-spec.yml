@@ -4,249 +4,279 @@
 
 swagger: "2.0"
 info:
-  title: Comparator
-  description: |
-    The Comparator orchestrates user requests for comparisons and authorizations to allow comparisons.
-
-    To authorize a comparison on a Vault Server document, the Comparator requests the Vault Server authorization
-    for the remote _Confidential Storage Hub_ to read the documents on the user's behalf. A resource is then created
-    at the remote Confidential Storage Hub configured with the Vault Server authorization tokens. This resource - hosted
-    on the Confidential Storage Hub itself - is in turn protected by a newly minted token authorizing the requesting
-    party to _reference_ the resource in a comparison. **Note that 'reference' is not the same as 'read'.** The
-    new authorization token issued by the Confidential Storage Hub does **not** allow the requesting party to extract
-    documents - it just allows them to 'reference' them in a comparison request.
-
-    To execute a comparison, the Comparator forwards the request with the authorization tokens to the remote
-    Confidential Storage Hub.
+  title: Confidential Storage Hub
+  description: Confidential Storage Hub
   version: 1.0.0
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
+schemes:
+  - http
+  - https
 paths:
-  /authorizations:
+  /hubstore/profiles:
     post:
-      description: |
-        Authorize a third party to perform a comparison on a Vault Server document.
-
-        Authorization to read the document is obtained at the Vault Server and pre-configured in the remote
-        Confidential Storage Hub, to be referenced during the actual comparison operation.
+      description: Create new profile.
       consumes:
         - application/json
       produces:
         - application/json
       parameters:
-        - name: authorization
+        - name: request
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/Profile"
+      responses:
+        201:
+          description: New profile.
+          headers:
+            Location:
+              description: Location of the new Profile.
+              type: string
+          schema:
+            $ref: "#/definitions/Profile"
+        500:
+          description: Generic Error
+          schema:
+            $ref: "#/definitions/Error"
+  /hubstore/profiles/{profileID}/queries:
+    parameters:
+      - name: profileID
+        in: path
+        description: The profile's ID.
+        required: true
+        type: string
+    post:
+      description: Store queries.
+      consumes:
+        - application/json
+      parameters:
+        - name: request
+          in: body
+          schema:
+            $ref: "#/definitions/Query"
+      responses:
+        201:
+          description: Query stored.
+          headers:
+            Location:
+              description: Location of the query resource.
+              type: string
+        400:
+          description: Bad request.
+          schema:
+            $ref: "#/definitions/Error"
+        500:
+          description: Generic Error
+          schema:
+            $ref: "#/definitions/Error"
+  /hubstore/profiles/{profileID}/authorizations:
+    parameters:
+      - name: profileID
+        in: path
+        description: The profile's ID.
+        type: string
+        required: true
+    post:
+      description: Creates a new authorization.
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: request
           in: body
           required: true
           schema:
             $ref: "#/definitions/Authorization"
       responses:
-        200:
-          description: Authorization created.
+        201:
+          description: The new authorization.
           headers:
             Location:
-              description: Location of the Authorization.
+              description: Location of the authorization.
               type: string
           schema:
             $ref: "#/definitions/Authorization"
-          examples: {
-            "application/json": {
-              "id": "123456",
-              "requestingParty": "did:example:party_doing_comparison",
-              "scope": [
-                {
-                  "vaultID": "did:example:123",
-                  "docID": "batphone",
-                  "actions": [ "compare" ],
-                  "caveats": [
-                    {
-                      "type": "expiry",
-                      "duration": 600
-                    }
-                  ],
-                  "authToken": "21tDAKCERh95uGgKbJNHYp"
-                }
-              ]
-            }
-          }
         500:
           description: Generic Error
           schema:
             $ref: "#/definitions/Error"
   /compare:
     post:
-      description: |
-        Execute a _remote_ comparison of the Confidential Storage documents fetched with the credentials provided.
-        This comparison is performed remotely by the Confidential Storage hub using the credentials.
-
-        The comparison's operator's type determines the type of comparison to be performed.
-
-        The result is always a boolean value.
+      description: Evaluates an operator with its inputs and returns the result.
       consumes:
         - application/json
       produces:
         - application/json
       parameters:
-        - name: comparison
+        - name: request
           in: body
           required: true
           schema:
-            $ref: "#/definitions/Comparison"
+            $ref: "#/definitions/ComparisonRequest"
       responses:
         200:
-          description: Result of comparison.
+          description: Result.
           schema:
-            $ref: "#/definitions/ComparisonResult"
-          examples: {
-            "application/json": {
-              "result": true
-            }
-          }
+            $ref: "#/definitions/Comparison"
         500:
-          description: Generic Error
+          description: Generic error.
           schema:
             $ref: "#/definitions/Error"
   /extract:
     post:
-      description: |
-        Extract the contents of one or more documents using the authorization tokens provided. The tokens originate
-        from authorizations granted at other Comparators. Each element in the response is correlated to its query
-        via the ID.
+      description: Extracts the contents of documents.
       consumes:
         - application/json
       produces:
         - application/json
       parameters:
-        - name: extract
+        - name: request
           in: body
           required: true
           schema:
-            $ref: "#/definitions/Extract"
+            type: array
+            items:
+              $ref: "#/definitions/Query"
+            minItems: 1
       responses:
         200:
-          description: list of extracted documents
+          description: The extracted and decrypted documents.
           schema:
-            $ref: "#/definitions/ExtractResp"
+            $ref: "#/definitions/ExtractionResponse"
         500:
-          description: Generic Error
-          schema:
-            $ref: "#/definitions/Error"
-  /config:
-    get:
-      description: |
-        Returns the Comparator's auto-generated configuration.
-
-        This configuration may be used for instance to configure a profile in the VC HTTP API for issuance of
-        Verifiable Credentials using the same DID and keys.
-      produces:
-        - application/json
-      responses:
-        200:
-          description: The comparator's configuration.
-          schema:
-            $ref: "#/definitions/Config"
-          examples: {
-            "application/json": {
-              "did": "did:example:H3C2AVvLMv6gmMNam3uVAjZpfkcJCwDwnZn6z3wXmqPV",
-              "authKeyURL": "did:example:H3C2AVvLMv6gmMNam3uVAjZpfkcJCwDwnZn6z3wXmqPV#H3C2AVvLMv6gmMNam3uVAjZpfkcJCwDwnZn6z3wXmqPV",
-              "key": {
-                "keys": [
-                  {
-                    "kty": "EC",
-                    "crv": "P-256",
-                    "x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
-                    "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
-                    "d": "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE",
-                    "kid": "1"
-                  }
-                ]
-              }
-            }
-          }
-        500:
-          description: Generic Error
-          schema:
-            $ref: "#/definitions/Error"
+          $ref: "#/definitions/Error"
 definitions:
-  Authorization:
-    description: |
-      An authorization object encodes the permissions granted to a third party. Its `scope` details the allowed
-      action and the object on which the action will be performed. The `requestingParty` is the third party
-      allowed to perform those actions.
-
-      The `authToken` is an opaque tokens granting the `requestingParty` the priviledge of running a comparison
-      with the document identified in `scope` at the remote Confidential Storage Hub.
+  Profile:
     type: object
-    example: {
-      "requestingParty": "did:example:party_doing_comparison",
-      "scope": [
-        {
-          "vaultID": "did:example:123",
-          "docID": "batphone",
-          "actions": [ "compare" ],
-          "caveats": [
-            {
-              "type": "expiry",
-              "duration": 600
-            }
-          ],
-        }
-      ]
-    }
     required:
-      - scope
-      - requestingParty
+      - controller
     properties:
       id:
         type: string
-        description: The authorization's unique ID.
-      scope:
-        $ref: "#/definitions/Scope"
-      requestingParty:
-        description: KeyID in the format of a DID URL that identifies the party granted authorization.
+      controller:
         type: string
-      authToken:
+      zcap:
         type: string
-        description: |
-          An opaque authorization token authorizing the requesting party to perform a comparison
-          referencing the document in the `scope`.
-  Scope:
+  ComparisonRequest:
+    type: object
+    properties:
+      op:
+        $ref: "#/definitions/Operator"
+  Comparison:
+    description: TODO - "comparison" does not sound apt as a name
+    type: object
+    properties:
+      result:
+        type: boolean
+  Operator:
     type: object
     required:
-      - docID
-      - actions
-      - authTokens
+      - type
+    discriminator: type
     properties:
-      vaultID:
-        description: the Vault Server ID (DID)
+      type:
         type: string
-      docID:
-        description: an identifier for a document stored in the Vault Server.
-        type: string
-      docAttrPath:
-        description: Optional json path. Authorizes the comparison of a portion of the document.
-        type: string
-      authTokens:
-        type: object
+  EqOp:
+    allOf:
+      - $ref: "#/definitions/Operator"
+      - type: object
+        required:
+          - args
         properties:
-          edv:
+          args:
+            type: array
+            items:
+              $ref: "#/definitions/Query"
+            minItems: 2
+  Query:
+    type: object
+    required:
+      - type
+    discriminator: type
+    properties:
+      id:
+        type: string
+      type:
+        type: string
+  DocQuery:
+    allOf:
+      - $ref: "#/definitions/Query"
+      - type: object
+        required:
+          - vaultID
+          - docID
+          - upstreamAuth
+        properties:
+          vaultID:
             type: string
-          kms:
+          docID:
             type: string
-      actions:
-        type: array
-        items:
-          type: string
-          enum:
-            - compare
-      caveats:
-        type: array
-        items:
-          $ref: "#/definitions/Caveat"
+          path:
+            type: string
+          upstreamAuth:
+            type: object
+            required:
+              - edv
+              - kms
+            properties:
+              edv:
+                $ref: "#/definitions/UpstreamAuthorization"
+              kms:
+                $ref: "#/definitions/UpstreamAuthorization"
+  RefQuery:
+    allOf:
+      - $ref: "#/definitions/Query"
+      - type: object
+        required:
+          - ref
+        properties:
+          ref:
+            type: string
+  Authorization:
+    type: object
+    required:
+      - requestingParty
+      - scope
+    properties:
+      id:
+        type: string
+      requestingParty:
+        type: string
+      scope:
+        type: object
+        required:
+          - resourceID
+          - resourceType
+          - action
+        properties:
+          resourceID:
+            type: string
+          resourceType:
+            type: string
+          action:
+            type: array
+            items:
+              type: string
+              enum:
+                - read
+                - reference
+          caveats:
+            type: array
+            items:
+              $ref: "#/definitions/Caveat"
+      zcap:
+        type: string
+  UpstreamAuthorization:
+    type: object
+    properties:
+      baseURL:
+        type: string
+      zcap:
+        type: string
   Caveat:
-    description: |
-      Caveats place constraints on the scope of an authorization.
-      For example, an authorization may allow to compare a document but only for a certain length of time (caveat).
     type: object
     required:
       - type
@@ -262,154 +292,14 @@ definitions:
           duration:
             type: integer
             description: Duration (in seconds) for which this authorization will remain valid.
-  Comparison:
-    description: |
-      A comparison is a request to compare two or more documents.
-
-      Comparisons have an operator that determines the kind of comparison to be performed.
-    type: object
-    example: {
-      "op": {
-        "type": "EqOp",
-        "args": [
-          {
-            "type": "DocQuery",
-            "vaultID": "did:example:123",
-            "docID": "batphone",
-            "authTokens": {
-              "edv": "21tDAKCERh95uGgKbJNHYp",
-              "kms": "bcehfew7h32f32h7af3"
-            }
-          },
-          {
-            "type": "AuthorizedQuery",
-            "authToken": "123456789abcdefghi"
-          }
-        ]
-      }
-    }
-    properties:
-      op:
-        $ref: "#/definitions/Operator"
-  ComparisonResult:
-    type: object
-    properties:
-      result:
-        type: boolean
-  Operator:
-    description: |
-      Operators indicate the kind of comparison operation to be performed.
-    type: object
-    required:
-      - type
-    properties:
-      type:
-        type: string
-    discriminator: type
-  EqOp:
-    allOf:
-      - $ref: "#/definitions/Operator"
-      - type: object
-        required:
-          - args
-        properties:
-          args:
-            type: array
-            items:
-              $ref: "#/definitions/Query"
-            minItems: 2
-  Query:
-    description: A query identifies a document to be compared.
-    type: object
-    required:
-      - type
-    properties:
-      id:
-        type: string
-      type:
-        type: string
-    discriminator: type
-  DocQuery:
-    description: |
-      DocQuery identifies a document by directly referencing the document's Vault Server vaultID and docID.
-      It also contains the necessary authorization tokens to access the document at the remote Confidential Storage
-      vault and decrypt with the WebKMS key.
-    allOf:
-      - $ref: "#/definitions/Query"
-      - type: object
-        required:
-          - vaultID
-          - docID
-          - authTokens
-        properties:
-          vaultID:
-            type: string
-          docID:
-            description: an identifier for a document stored in the Vault Server.
-            type: string
-          docAttrPath:
-            description: |
-              By default, a DocQuery identifies a document in its entirety, which means the entire contents of the
-              document are used in the comparison. `docAttrPath` is a JSONPath that allows a _portion_ of the
-              document to be used during the comparison.
-            type: string
-          authTokens:
-            type: object
-            properties:
-              edv:
-                type: string
-              kms:
-                type: string
-  AuthorizedQuery:
-    description: |
-      AuthorizedQuery is a query that has been pre-authorized by another Comparator.
-      The AuthorizedQuery's `authToken` is the authorization token handed back by the other Comparator authorizing
-      the comparison on a document.
-    allOf:
-      - $ref: "#/definitions/Query"
-      - type: object
-        required:
-          - authToken
-        properties:
-          authToken:
-            type: string
-  Config:
-    type: object
-    required:
-      - did
-      - key
-    properties:
-      did:
-        type: string
-        description: The comparator's unique DID.
-      authKeyURL:
-        type: string
-        description: The comparator's authentication key's keyID in the format of a DID URL.
-      key:
-        type: object
-        description: A JWK Set containing the primary public/private key pair.
-  Extract:
-    type: object
-    required:
-      - queries
-    properties:
-      queries:
-        type: array
-        items:
-          $ref: "#/definitions/Query"
-  ExtractResp:
-    type: object
-    required:
-      - documents
-    properties:
-      documents:
-        type: array
-        items:
-          properties:
-            id:
-              type: string
-            contents:
-              type: object
+  ExtractionResponse:
+    type: array
+    items:
+      properties:
+        id:
+          type: string
+        document:
+          type: object
   Error:
     type: object
     properties:
